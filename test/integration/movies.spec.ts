@@ -15,7 +15,10 @@ import { Genre } from '../../src/genres/genre.entity';
 import { MovieGenre } from '../../src/movies/movie-genre.entity';
 import { Movie } from '../../src/movies/movie.entity';
 import { MoviesService } from '../../src/movies/movies.service';
-import { startPostgres, PostgresTestContext } from '../utils/postgres-container';
+import {
+  startPostgres,
+  PostgresTestContext,
+} from '../utils/postgres-container';
 
 describe('MoviesService (integration)', () => {
   let ctx: PostgresTestContext;
@@ -75,7 +78,11 @@ describe('MoviesService (integration)', () => {
 
     cache = { get: jest.fn(), set: jest.fn() };
     cache.get.mockResolvedValue(undefined);
-    service = new MoviesService(movieRepo, genreRepo, cache as unknown as Cache);
+    service = new MoviesService(
+      movieRepo,
+      genreRepo,
+      cache as unknown as Cache,
+    );
   });
 
   describe('findMany', () => {

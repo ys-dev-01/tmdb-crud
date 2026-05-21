@@ -9,10 +9,7 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
-import {
-  RedisContainer,
-  StartedRedisContainer,
-} from '@testcontainers/redis';
+import { RedisContainer, StartedRedisContainer } from '@testcontainers/redis';
 
 import { startPostgres, PostgresTestContext } from './utils/postgres-container';
 
@@ -115,7 +112,10 @@ describe('Movies (e2e)', () => {
 
     const reg = await request(app.getHttpServer())
       .post('/auth/register')
-      .send({ email: 'movies-e2e@test.com', password: 'correct horse battery staple' })
+      .send({
+        email: 'movies-e2e@test.com',
+        password: 'correct horse battery staple',
+      })
       .expect(201);
     token = (reg.body as TokensResponse).accessToken;
   });
@@ -149,9 +149,9 @@ describe('Movies (e2e)', () => {
       .get('/movies?limit=10')
       .set('Authorization', `Bearer ${token}`)
       .expect(200);
-    const crossed = (list.body as { data: { id: string; title: string }[] }).data.find(
-      (m) => m.title === 'Star Crossed',
-    )!;
+    const crossed = (
+      list.body as { data: { id: string; title: string }[] }
+    ).data.find((m) => m.title === 'Star Crossed')!;
 
     const res = await request(app.getHttpServer())
       .get(`/movies/${crossed.id}`)
