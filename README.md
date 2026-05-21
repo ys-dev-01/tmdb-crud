@@ -67,15 +67,15 @@ src/
 ├── health/        # /health endpoint
 ├── tmdb/          # TmdbClient (axios + retry)
 ├── users/         # User entity + UsersService
-├── movies/        # Movie + MovieGenre entities
-├── ratings/       # Rating entity
+├── movies/        # /movies + sync + cache
+├── ratings/       # /movies/:id/ratings endpoints + counter maintenance
 ├── watchlist/     # WatchlistEntry entity
 ├── favorites/     # FavoriteEntry entity
 ├── app.module.ts
 └── main.ts
 ```
 
-Entities for unimplemented features (movies, ratings, watchlist, favorites) live alongside the modules they will belong to; the schema was designed upfront in [`docs/schema.md`](docs/schema.md).
+Entities for unimplemented features (watchlist, favorites) live alongside the modules they will belong to; the full schema was designed upfront in [`docs/schema.md`](docs/schema.md).
 
 ## Endpoints
 
@@ -93,6 +93,9 @@ Every route requires `Authorization: Bearer <accessToken>` unless marked public.
 | GET | `/movies` | required | List movies, cursor-paginated, optional `?genreIds=1,2` filter |
 | GET | `/movies/search` | required | Substring search over title (`?q=...`, optional `?genreIds=`) |
 | GET | `/movies/:id` | required | Movie detail with embedded genres |
+| PUT | `/movies/:id/ratings` | required | Upsert the caller's rating (value 1–10); returns the recomputed movie aggregates |
+| DELETE | `/movies/:id/ratings` | required | Remove the caller's rating (404 if not present) |
+| GET | `/movies/:id/ratings/me` | required | The caller's rating for the movie, or 404 |
 | GET | `/api` | public | Swagger UI |
 | GET | `/api-json` | public | OpenAPI spec |
 
@@ -135,7 +138,38 @@ Initial page count is set by `MOVIES_SYNC_MAX_PAGES` (default 5 = ~100 movies, f
 
 ### Avg rating — O(1) reads
 
-The `movies` table carries denormalized `rating_sum` (bigint) and `rating_count` (int) columns. Avg is computed as `rating_sum / NULLIF(rating_count, 0)` directly on the row — no JOIN, no AVG aggregate, no row scan over the ratings table. PR #8 maintains these counters transactionally on every rating write.
+The `movies` table carries denormalized `rating_sum` (bigint) and `rating_count` (int) columns. Avg is computed as `rating_sum / NULLIF(rating_count, 0)` directly on the row — no JOIN, no AVG aggregate, no row scan over the ratings table. The ratings module maintains these counters transactionally on every rating write (see [Ratings](#ratings) below).
+
+## Ratings
+
+Each (user, movie) pair has at most one row in `user_ratings`. Three endpoints:
+
+- **`PUT /movies/:id/ratings`** with `{ "value": 1..10 }` — upserts via `ON CONFLICT (user_id, movie_id) DO UPDATE`. Returns the new rating plus the recomputed movie aggregates so the client doesn't need a follow-up GET.
+- **`DELETE /movies/:id/ratings`** — strict 404 if the caller has no rating on this movie. DELETE of a specific resource that doesn't exist is treated as a client mistake, not an idempotent no-op.
+- **`GET /movies/:id/ratings/me`** — returns the caller's rating row, or 404.
+
+### Counter maintenance
+
+The denormalized `rating_sum` and `rating_count` columns on `movies` are kept in lockstep with `user_ratings` inside a single transaction:
+
+1. `SELECT … FOR UPDATE` on the movies row — row-level lock, serializes all rating writes for this movie.
+2. Read the existing rating (if any) inside the lock to compute `(Δsum, Δcount)`.
+3. `INSERT … ON CONFLICT DO UPDATE` the rating row, or `DELETE` it.
+4. `UPDATE movies SET rating_sum = rating_sum + :Δsum, rating_count = rating_count + :Δcount` — single statement, no read-then-write.
+5. Commit.
+
+Locking the movies row (not the rating row) is the only correct approach for the "no rating yet → two concurrent PUTs" case: `SELECT FOR UPDATE` on a missing row doesn't lock anything, so both transactions would otherwise see "no rating", both compute `Δcount = +1`, and the counter would drift.
+
+The cost is that all rating writes against the same movie serialize. For this app it's the right trade-off: aggregate correctness is structural, and contention is per-movie, not global.
+
+### Cache invalidation on writes
+
+Two caches go stale on every rating write:
+
+- `movies:detail:{id}` — deleted directly (the key is enumerable from the movie id).
+- `movies:list:*` and `movies:search:*` — invalidated via a shared **version key** in Redis (`movies:rating-version`). The list/search cache keys include a `v{version}` segment. On any rating write, the version is bumped to `Date.now()`; previously-cached entries become unreachable in O(1) and TTL out on their own. Cheaper than `SCAN`-and-`DEL`, and adapter-agnostic.
+
+Cache invalidation runs *after* the transaction commits, never inside. Invalidating before commit would open a window where a reader sees pre-commit DB state and re-populates the cache with stale data.
 
 ## Database
 
@@ -162,9 +196,10 @@ Stack: `@nestjs/cache-manager` (NestJS wrapper) + `cache-manager` v7 + `@keyv/re
 | Path | Key | TTL | Notes |
 |---|---|---|---|
 | `GET /genres` | `genres:list` | 24h | TMDB genre list changes maybe yearly; aggressive TTL is safe. |
-| `GET /movies` | `movies:list:{limit}:{cursor}:{genreIds}` | 5min + jitter | Cursor + filter included in the key; jitter prevents stampede on cold start. |
-| `GET /movies/:id` | `movies:detail:{id}` | 5min + jitter | Invalidated by ratings writes (PR #8). |
-| `GET /movies/search` | `movies:search:{q-lower}:{limit}:{genreIds}` | 5min + jitter | `q` is lowercased so `mario` and `Mario` share the entry. |
+| `GET /movies` | `movies:list:v{version}:{limit}:{cursor}:{genreIds}` | 5min + jitter | Cursor + filter included in the key. `version` is bumped by ratings writes (see [Cache invalidation on writes](#cache-invalidation-on-writes)). Jitter prevents stampede on cold start. |
+| `GET /movies/:id` | `movies:detail:{id}` | 5min + jitter | Invalidated (`DEL`) on every rating write touching this movie. |
+| `GET /movies/search` | `movies:search:v{version}:{q-lower}:{limit}:{genreIds}` | 5min + jitter | `q` is lowercased so `mario` and `Mario` share the entry. Same version-bump invalidation as the list. |
+| _(version key)_ | `movies:rating-version` | 30d (refreshed on each rating write) | Holds the current namespace version for `movies:list:*` and `movies:search:*`. Bumped to `Date.now()` on any rating write; orphan entries TTL out. |
 
 Redis runs as a separate compose service:
 
