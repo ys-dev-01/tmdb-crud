@@ -70,12 +70,12 @@ src/
 ├── movies/        # /movies + sync + cache
 ├── ratings/       # /movies/:id/ratings endpoints + counter maintenance
 ├── watchlist/     # /watchlist endpoints + per-user cache invalidation
-├── favorites/     # FavoriteEntry entity
+├── favorites/     # /favorites endpoints + per-user cache invalidation
 ├── app.module.ts
 └── main.ts
 ```
 
-The favorites entity lives alongside the module it will belong to; the full schema was designed upfront in [`docs/schema.md`](docs/schema.md).
+The full schema was designed upfront in [`docs/schema.md`](docs/schema.md).
 
 ## Endpoints
 
@@ -99,6 +99,9 @@ Every route requires `Authorization: Bearer <accessToken>` unless marked public.
 | POST | `/watchlist/:movieId` | required | Idempotently add a movie to the caller's watchlist |
 | DELETE | `/watchlist/:movieId` | required | Idempotently remove from the caller's watchlist (204 either way) |
 | GET | `/watchlist` | required | Caller's watchlist, cursor-paginated, most-recent first |
+| POST | `/favorites/:movieId` | required | Idempotently add a movie to the caller's favorites |
+| DELETE | `/favorites/:movieId` | required | Idempotently remove from the caller's favorites (204 either way) |
+| GET | `/favorites` | required | Caller's favorites, cursor-paginated, most-recent first |
 | GET | `/api` | public | Swagger UI |
 | GET | `/api-json` | public | OpenAPI spec |
 
@@ -190,6 +193,19 @@ The `watchlist` table is a pure join/membership table — composite PK `(user_id
 
 Each user has their own version key (`watchlist:version:{userId}`) in Redis. List cache keys include the version: `watchlist:{userId}:v{version}:{cursor}:{limit}`. Any write by a user bumps their own version, rendering that user's previously-cached pages unreachable in O(1). User A's writes don't touch user B's cache — important for a per-user resource where global invalidation would be over-broad.
 
+## Favorites
+
+Same pattern as [Watchlist](#watchlist) — composite-PK `favorites` table, idempotent POST and DELETE, cursor-paginated GET with a single JOIN, per-user version-bump cache invalidation.
+
+Kept as an independent module from watchlist because the semantics are distinct: a movie can be in both lists simultaneously, and the two should be free to evolve without coupling. The shared shape is intentional convergence (same data model fits both), not abstracted-out commonality.
+
+| | Watchlist | Favorites |
+|---|---|---|
+| Table | `watchlist` | `favorites` |
+| Cache key prefix | `watchlist:{userId}:v…` | `favorites:{userId}:v…` |
+| Version key | `watchlist:version:{userId}` | `favorites:version:{userId}` |
+| Semantic | "want to watch" | "love" |
+
 ## Database
 
 Schema is managed by TypeORM migrations under `src/database/migrations/`. The current state is documented in [`docs/schema.md`](docs/schema.md) with an ER diagram and per-table notes.
@@ -221,6 +237,8 @@ Stack: `@nestjs/cache-manager` (NestJS wrapper) + `cache-manager` v7 + `@keyv/re
 | _(version key)_ | `movies:rating-version` | 30d (refreshed on each rating write) | Holds the current namespace version for `movies:list:*` and `movies:search:*`. Bumped to `Date.now()` on any rating write; orphan entries TTL out. |
 | `GET /watchlist` | `watchlist:{userId}:v{version}:{cursor}:{limit}` | 5min + jitter | Per-user cache, scoped by user id. `version` is the per-user version from `watchlist:version:{userId}`. |
 | _(per-user version)_ | `watchlist:version:{userId}` | 30d (refreshed on each watchlist write) | Bumped on every add/remove by that user; other users' caches are untouched. |
+| `GET /favorites` | `favorites:{userId}:v{version}:{cursor}:{limit}` | 5min + jitter | Same per-user pattern as watchlist; separate version namespace. |
+| _(per-user version)_ | `favorites:version:{userId}` | 30d (refreshed on each favorites write) | Bumped on every favorites write by that user. Independent of `watchlist:version:*`. |
 
 Redis runs as a separate compose service:
 
