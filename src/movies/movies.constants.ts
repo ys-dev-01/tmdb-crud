@@ -43,3 +43,27 @@ export const MOVIES_CACHE_TTL_MS = 5 * 60 * 1000;
  * a small spread that's invisible to users.
  */
 export const MOVIES_CACHE_TTL_JITTER_MS = 30 * 1000;
+
+/**
+ * Cache key holding the current "version" of the movies list/search
+ * cache namespace. Bumped (set to Date.now()) by ratings writes so the
+ * next read constructs a fresh cache key prefix and bypasses all
+ * previously-cached list/search entries. Equivalent to Rails' Russian
+ * doll caching — O(1) invalidation of a whole namespace without SCAN.
+ *
+ * Per-movie detail caches (`movies:detail:{id}`) are deleted directly
+ * since their keys are enumerable from the movie id.
+ */
+export const MOVIES_RATING_VERSION_KEY = 'movies:rating-version';
+
+/**
+ * TTL for the version key. Long enough that an idle deployment doesn't
+ * lose its version (which would invalidate the list/search namespace
+ * silently on the next read), short enough to not pile up forever in
+ * Redis if the key is ever orphaned. 30 days is well past any normal
+ * idle window.
+ */
+export const MOVIES_RATING_VERSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+/** Default version string used before any rating write has bumped it. */
+export const MOVIES_RATING_VERSION_DEFAULT = '0';
