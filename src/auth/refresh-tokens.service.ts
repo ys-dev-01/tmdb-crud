@@ -1,7 +1,7 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, IsNull, Repository } from 'typeorm';
 import { randomBytes, createHash, randomUUID } from 'crypto';
 import ms, { StringValue } from 'ms';
 import { RefreshToken } from './refresh-token.entity';
@@ -85,8 +85,11 @@ export class RefreshTokensService {
    * Used by /auth/logout.
    */
   async revoke(rawToken: string): Promise<void> {
+    // IsNull() generates `revoked_at IS NULL`. Passing `undefined` would
+    // generate `revoked_at = NULL`, which is always UNKNOWN in SQL and
+    // matches zero rows (silently no-ops for active tokens).
     await this.repo.update(
-      { tokenHash: this.hash(rawToken), revokedAt: undefined },
+      { tokenHash: this.hash(rawToken), revokedAt: IsNull() },
       { revokedAt: new Date() },
     );
   }
