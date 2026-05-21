@@ -26,4 +26,12 @@ export const envValidationSchema = Joi.object({
   TMDB_BASE_URL: Joi.string()
     .uri({ scheme: ['https'] })
     .default('https://api.themoviedb.org/3'),
+
+  // Auth — HMAC-SHA256 JWT secret. >= 32 bytes random; generate with
+  // `openssl rand -hex 32`. Treat like a DB password — leak it and every
+  // existing token can be forged.
+  JWT_SECRET: Joi.string().min(32).required(),
+  // Accepted formats: jsonwebtoken's expiresIn (e.g., '15m', '1h', '7d').
+  JWT_ACCESS_TTL: Joi.string().default('15m'),
+  JWT_REFRESH_TTL: Joi.string().default('7d'),
 });
