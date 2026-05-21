@@ -1,3 +1,4 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { Genre } from '../genre.entity';
 
 /**
@@ -6,8 +7,22 @@ import { Genre } from '../genre.entity';
  * response, and DB-side renames don't break consumers.
  */
 export class GenreDto {
+  @ApiProperty({
+    description: 'Internal database identifier (bigint as string).',
+    example: '1',
+  })
   id: string;
+
+  @ApiProperty({
+    description: 'TMDB-side genre id; stable across our DB resets.',
+    example: 28,
+  })
   tmdbId: number;
+
+  @ApiProperty({
+    description: 'Display name from TMDB.',
+    example: 'Action',
+  })
   name: string;
 
   static from(g: Genre): GenreDto {
