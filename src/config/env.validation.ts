@@ -16,4 +16,14 @@ export const envValidationSchema = Joi.object({
   DB_USER: Joi.string().required(),
   DB_PASSWORD: Joi.string().required(),
   DB_NAME: Joi.string().required(),
+
+  // TMDB
+  // v3 API key is 32 hex chars; reject malformed values at boot rather than at first request.
+  TMDB_API_KEY: Joi.string()
+    .length(32)
+    .pattern(/^[a-f0-9]+$/)
+    .required(),
+  TMDB_BASE_URL: Joi.string()
+    .uri({ scheme: ['https'] })
+    .default('https://api.themoviedb.org/3'),
 });
