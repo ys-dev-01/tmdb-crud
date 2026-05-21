@@ -117,4 +117,23 @@ describe('TmdbClient', () => {
       await expect(client.fetchGenres()).rejects.toBeInstanceOf(TmdbError);
     });
   });
+
+  describe('fetchDiscoverMovies', () => {
+    it('GETs /discover/movie with the page param and popularity sort', async () => {
+      const data = { page: 1, results: [], total_pages: 0, total_results: 0 };
+      mockHttp.get.mockResolvedValue({ data });
+
+      const result = await client.fetchDiscoverMovies(3);
+
+      expect(mockHttp.get).toHaveBeenCalledWith('/discover/movie', {
+        params: {
+          language: 'en-US',
+          sort_by: 'popularity.desc',
+          include_adult: 'false',
+          page: 3,
+        },
+      });
+      expect(result).toEqual(data);
+    });
+  });
 });

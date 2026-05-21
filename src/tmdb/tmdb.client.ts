@@ -6,7 +6,7 @@ import axiosRetry, {
   isNetworkOrIdempotentRequestError,
 } from 'axios-retry';
 import { TmdbError } from './tmdb.error';
-import { TmdbGenresResponse } from './tmdb.types';
+import { TmdbDiscoverResponse, TmdbGenresResponse } from './tmdb.types';
 
 @Injectable()
 export class TmdbClient implements OnModuleInit {
@@ -38,6 +38,19 @@ export class TmdbClient implements OnModuleInit {
   async fetchGenres(): Promise<TmdbGenresResponse> {
     return this.get<TmdbGenresResponse>('/genre/movie/list', {
       language: 'en-US',
+    });
+  }
+
+  /**
+   * Paginated movie listing. TMDB caps `page` at 500 (~10k movies total).
+   * sort_by=popularity.desc keeps results stable enough for repeat syncs.
+   */
+  async fetchDiscoverMovies(page: number): Promise<TmdbDiscoverResponse> {
+    return this.get<TmdbDiscoverResponse>('/discover/movie', {
+      language: 'en-US',
+      sort_by: 'popularity.desc',
+      include_adult: 'false',
+      page,
     });
   }
 
