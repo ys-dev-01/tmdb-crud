@@ -19,8 +19,12 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-15m}
       JWT_REFRESH_TTL: ${JWT_REFRESH_TTL:-7d}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     restart: unless-stopped
 
@@ -41,5 +45,21 @@ services:
     restart: unless-stopped
     # No ports: mapping — postgres is only reachable inside the compose network.
 
+  redis:
+    image: redis:7-alpine
+    container_name: tmdb-redis
+    # 256MB cap with LRU eviction — bounds memory growth; cache is a
+    # performance layer, not a system of record. Safe to evict anything.
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
 volumes:
   pg_data:
+  redis_data:
