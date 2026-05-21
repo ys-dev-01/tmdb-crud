@@ -49,4 +49,11 @@ export const envValidationSchema = Joi.object({
   // Redis (cache-aside via CacheModule + @keyv/redis)
   REDIS_HOST: Joi.string().required(),
   REDIS_PORT: Joi.number().port().default(6379),
+
+  // CORS allowlist — comma-separated list of allowed origins
+  // (e.g., 'https://app.example.com,https://admin.example.com').
+  // Unset/empty means CORS is disabled (deny-all on cross-origin
+  // requests), the safe default for an API. The frontend needs this
+  // set in prod to permit browser calls.
+  CORS_ORIGIN: Joi.string().allow('').optional(),
 });
