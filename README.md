@@ -52,6 +52,7 @@ All env vars the app reads are documented in `.env.example`.
 | `JWT_REFRESH_TTL` | no | `7d` | Refresh token lifetime |
 | `REDIS_HOST` | yes | — | Redis host (`redis` inside compose) |
 | `REDIS_PORT` | no | `6379` | Redis port |
+| `CORS_ORIGIN` | no | _(empty)_ | Comma-separated list of allowed browser origins. Unset → all cross-origin requests denied (safe API default). |
 
 Env is validated at startup via Joi; the app exits if anything is missing or invalid.
 
@@ -255,6 +256,21 @@ docker compose exec redis redis-cli GET '<key>'
 ```
 
 Note: `@keyv/redis` prefixes keys with `keyv::keyv:` — the genres list lives at `keyv::keyv:genres:list`.
+
+## Security
+
+Two layers sit ahead of the application code:
+
+- **`helmet`** — sets the standard set of security headers (HSTS, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `X-Frame-Options: SAMEORIGIN`, COOP/CORP), and removes `X-Powered-By`. CSP is enabled with the minimum carve-outs Swagger UI requires (inline scripts/styles for the loader; `validator.swagger.io` for the validator badge). The CSP shape is in `src/main.ts` so an interviewer can read exactly what is and isn't allowed.
+- **CORS allowlist** — controlled by `CORS_ORIGIN`. Unset → cross-origin requests denied. Set in prod to your frontend origin(s):
+
+  ```bash
+  CORS_ORIGIN=https://app.example.com,https://admin.example.com
+  ```
+
+  `credentials: true` so future cookie-based session flows don't require revisiting the config; bearer-bearing requests in headers already bypass the preflight.
+
+The app container runs as the non-root `node` user (uid 1000); the multi-stage Dockerfile leaves `/app` owned by root so the runtime can't write its own code.
 
 ## Tests
 
