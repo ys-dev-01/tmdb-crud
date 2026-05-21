@@ -21,4 +21,8 @@ async function bootstrap() {
   const port = config.get<number>('PORT') ?? 8080;
   await app.listen(port);
 }
-bootstrap();
+
+bootstrap().catch((err) => {
+  console.error('Failed to bootstrap NestJS app', err);
+  process.exit(1);
+});
