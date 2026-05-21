@@ -1,0 +1,43 @@
+# Node
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build output
+dist
+coverage
+.nyc_output
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Env files (never bake secrets into the image)
+.env
+.env.local
+.env.*.local
+
+# IDE / OS
+.vscode
+.idea
+.DS_Store
+*.swp
+
+# Tests (run in CI before the build; not baked into the prod image)
+test
+*.spec.ts
+*.test.ts
+
+# Docs
+README.md
+docs
+
+# CI config
+.github
+
+# Docker meta (avoid recursive copies)
+Dockerfile
+docker-compose*.yml
+.dockerignore
