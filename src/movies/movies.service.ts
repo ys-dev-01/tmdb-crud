@@ -10,6 +10,8 @@ import { ListMoviesQueryDto } from './dto/list-movies.query.dto';
 import { MovieDetailDto } from './dto/movie-detail.dto';
 import { MovieListItemDto } from './dto/movie-list-item.dto';
 import { PaginatedMoviesDto } from './dto/paginated-movies.dto';
+import { SearchMoviesQueryDto } from './dto/search-movies.query.dto';
+import { SearchResultDto } from './dto/search-result.dto';
 
 /**
  * Read-side for movies.
@@ -52,6 +54,46 @@ export class MoviesService {
       .getMany();
 
     return MovieDetailDto.fromWithGenres(movie, genres);
+  }
+
+  /**
+   * Substring search against movie titles. The WHERE clause uses ILIKE
+   * on the trigram-GIN-indexed `title` column; Postgres picks the index
+   * once the pattern has ≥ 2 chars (enforced by the DTO).
+   *
+   * Ordered by popularity DESC, id ASC — users searching "venom" want
+   * the popular Venom first, not the most-exact title match. Ranking by
+   * trigram similarity is fancier but conflicts with stable pagination
+   * (similarity is query-dependent and not a column).
+   */
+  async search(query: SearchMoviesQueryDto): Promise<SearchResultDto> {
+    const limit = query.limit ?? MOVIES_LIST_DEFAULT_LIMIT;
+    const genreIds = query.genreIds
+      ?.split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    const qb = this.repo
+      .createQueryBuilder('m')
+      .where('m.title ILIKE :pattern', { pattern: `%${query.q}%` });
+
+    if (genreIds && genreIds.length > 0) {
+      qb.andWhere(
+        'EXISTS (SELECT 1 FROM movie_genres mg WHERE mg.movie_id = m.id AND mg.genre_id IN (:...genreIds))',
+        { genreIds },
+      );
+    }
+
+    const [movies, total] = await qb
+      .orderBy('m.popularity', 'DESC')
+      .addOrderBy('m.id', 'ASC')
+      .limit(limit)
+      .getManyAndCount();
+
+    return {
+      data: movies.map((m) => MovieListItemDto.from(m)),
+      total,
+    };
   }
 
   async findMany(query: ListMoviesQueryDto): Promise<PaginatedMoviesDto> {

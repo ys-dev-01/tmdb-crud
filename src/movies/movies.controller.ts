@@ -10,6 +10,8 @@ import {
 import { ListMoviesQueryDto } from './dto/list-movies.query.dto';
 import { MovieDetailDto } from './dto/movie-detail.dto';
 import { PaginatedMoviesDto } from './dto/paginated-movies.dto';
+import { SearchMoviesQueryDto } from './dto/search-movies.query.dto';
+import { SearchResultDto } from './dto/search-result.dto';
 import { MoviesService } from './movies.service';
 
 @ApiTags('movies')
@@ -29,6 +31,21 @@ export class MoviesController {
   @ApiOkResponse({ type: PaginatedMoviesDto })
   list(@Query() query: ListMoviesQueryDto): Promise<PaginatedMoviesDto> {
     return this.service.findMany(query);
+  }
+
+  // MUST be declared before @Get(':id') — Express matches in declaration
+  // order, so /movies/search would otherwise be captured by :id with id='search'.
+  @Get('search')
+  @ApiOperation({
+    summary: 'Substring search over movie titles',
+    description:
+      'Case-insensitive substring match via the trigram-GIN-indexed title ' +
+      'column. Results ordered by popularity DESC. Optional ?genreIds=1,2 ' +
+      'narrows further (OR semantics within the genre filter).',
+  })
+  @ApiOkResponse({ type: SearchResultDto })
+  search(@Query() query: SearchMoviesQueryDto): Promise<SearchResultDto> {
+    return this.service.search(query);
   }
 
   @Get(':id')

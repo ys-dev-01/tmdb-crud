@@ -14,3 +14,16 @@ export const MOVIES_LIST_DEFAULT_LIMIT = 20;
  * overview text.
  */
 export const MOVIES_LIST_MAX_LIMIT = 50;
+
+/**
+ * Minimum length of /movies/search ?q=. Below 2 characters, ILIKE
+ * '%x%' degenerates to a full-table scan and can't take useful advantage
+ * of the trigram index (trigrams are 3-character grams).
+ */
+export const MOVIES_SEARCH_MIN_QUERY_LENGTH = 2;
+
+/**
+ * Upper bound on ?q= so a caller can't smuggle a pathological pattern.
+ * 100 characters is longer than any real movie title.
+ */
+export const MOVIES_SEARCH_MAX_QUERY_LENGTH = 100;
