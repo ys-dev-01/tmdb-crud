@@ -11,6 +11,7 @@ import { HealthModule } from './health/health.module';
 import { GenresModule } from './genres/genres.module';
 import { MoviesModule } from './movies/movies.module';
 import { RatingsModule } from './ratings/ratings.module';
+import { WatchlistModule } from './watchlist/watchlist.module';
 import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 
@@ -51,6 +52,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     GenresModule,
     MoviesModule,
     RatingsModule,
+    WatchlistModule,
     AuthModule,
   ],
   controllers: [],

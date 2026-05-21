@@ -69,13 +69,13 @@ src/
 ├── users/         # User entity + UsersService
 ├── movies/        # /movies + sync + cache
 ├── ratings/       # /movies/:id/ratings endpoints + counter maintenance
-├── watchlist/     # WatchlistEntry entity
+├── watchlist/     # /watchlist endpoints + per-user cache invalidation
 ├── favorites/     # FavoriteEntry entity
 ├── app.module.ts
 └── main.ts
 ```
 
-Entities for unimplemented features (watchlist, favorites) live alongside the modules they will belong to; the full schema was designed upfront in [`docs/schema.md`](docs/schema.md).
+The favorites entity lives alongside the module it will belong to; the full schema was designed upfront in [`docs/schema.md`](docs/schema.md).
 
 ## Endpoints
 
@@ -96,6 +96,9 @@ Every route requires `Authorization: Bearer <accessToken>` unless marked public.
 | PUT | `/movies/:id/ratings` | required | Upsert the caller's rating (value 1–10); returns the recomputed movie aggregates |
 | DELETE | `/movies/:id/ratings` | required | Remove the caller's rating (404 if not present) |
 | GET | `/movies/:id/ratings/me` | required | The caller's rating for the movie, or 404 |
+| POST | `/watchlist/:movieId` | required | Idempotently add a movie to the caller's watchlist |
+| DELETE | `/watchlist/:movieId` | required | Idempotently remove from the caller's watchlist (204 either way) |
+| GET | `/watchlist` | required | Caller's watchlist, cursor-paginated, most-recent first |
 | GET | `/api` | public | Swagger UI |
 | GET | `/api-json` | public | OpenAPI spec |
 
@@ -171,6 +174,22 @@ Two caches go stale on every rating write:
 
 Cache invalidation runs *after* the transaction commits, never inside. Invalidating before commit would open a window where a reader sees pre-commit DB state and re-populates the cache with stale data.
 
+## Watchlist
+
+A per-user set of movies the caller wants to watch. Three endpoints:
+
+- **`POST /watchlist/:movieId`** — idempotent add. `INSERT … ON CONFLICT (user_id, movie_id) DO NOTHING`; a second call returns the existing entry without changing its `addedAt`. 404 if the movie id is unknown (pre-checked to surface a clean error rather than a translated FK violation).
+- **`DELETE /watchlist/:movieId`** — idempotent remove. 204 whether the entry existed or not. Set-membership semantics: "ensure X is not in my watchlist" is satisfied regardless of prior state. (Compare with `DELETE /ratings`, which is strict-404 because a rating carries a *value*, not just membership.)
+- **`GET /watchlist`** — cursor-paginated list, most-recent first. Single `LEFT JOIN` to `movies` so each response row carries full movie data — no N+1, one round-trip per page. Pagination keyed on `(addedAt, movieId)`.
+
+### Schema
+
+The `watchlist` table is a pure join/membership table — composite PK `(user_id, movie_id)` + `added_at`, no surrogate id. The composite PK gives us native `ON CONFLICT` support for idempotent inserts and a `WHERE user_id = ?` index for free (the PK starts with user_id).
+
+### Per-user cache invalidation
+
+Each user has their own version key (`watchlist:version:{userId}`) in Redis. List cache keys include the version: `watchlist:{userId}:v{version}:{cursor}:{limit}`. Any write by a user bumps their own version, rendering that user's previously-cached pages unreachable in O(1). User A's writes don't touch user B's cache — important for a per-user resource where global invalidation would be over-broad.
+
 ## Database
 
 Schema is managed by TypeORM migrations under `src/database/migrations/`. The current state is documented in [`docs/schema.md`](docs/schema.md) with an ER diagram and per-table notes.
@@ -200,6 +219,8 @@ Stack: `@nestjs/cache-manager` (NestJS wrapper) + `cache-manager` v7 + `@keyv/re
 | `GET /movies/:id` | `movies:detail:{id}` | 5min + jitter | Invalidated (`DEL`) on every rating write touching this movie. |
 | `GET /movies/search` | `movies:search:v{version}:{q-lower}:{limit}:{genreIds}` | 5min + jitter | `q` is lowercased so `mario` and `Mario` share the entry. Same version-bump invalidation as the list. |
 | _(version key)_ | `movies:rating-version` | 30d (refreshed on each rating write) | Holds the current namespace version for `movies:list:*` and `movies:search:*`. Bumped to `Date.now()` on any rating write; orphan entries TTL out. |
+| `GET /watchlist` | `watchlist:{userId}:v{version}:{cursor}:{limit}` | 5min + jitter | Per-user cache, scoped by user id. `version` is the per-user version from `watchlist:version:{userId}`. |
+| _(per-user version)_ | `watchlist:version:{userId}` | 30d (refreshed on each watchlist write) | Bumped on every add/remove by that user; other users' caches are untouched. |
 
 Redis runs as a separate compose service:
 
