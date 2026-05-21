@@ -205,7 +205,9 @@ describe('Ratings (e2e)', () => {
       .set('Authorization', `Bearer ${aliceToken}`)
       .expect(200);
     const row = (
-      res.body as { data: { id: string; avgRating: number; ratingCount: number }[] }
+      res.body as {
+        data: { id: string; avgRating: number; ratingCount: number }[];
+      }
     ).data.find((m) => m.id === movieId)!;
     expect(row.avgRating).toBe(7);
     expect(row.ratingCount).toBe(2);

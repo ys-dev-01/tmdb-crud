@@ -102,7 +102,9 @@ describe('RatingsService (integration)', () => {
       expect(fresh.ratingCount).toBe(1);
 
       // Exactly one row per (user, movie) — UNIQUE constraint enforces.
-      const rows = await ratingRepo.find({ where: { userId, movieId: movie.id } });
+      const rows = await ratingRepo.find({
+        where: { userId, movieId: movie.id },
+      });
       expect(rows).toHaveLength(1);
     });
 
@@ -140,7 +142,9 @@ describe('RatingsService (integration)', () => {
       const fresh = await movieRepo.findOneByOrFail({ id: movie.id });
       expect(fresh.ratingSum).toBe('0');
       expect(fresh.ratingCount).toBe(0);
-      const rows = await ratingRepo.find({ where: { userId, movieId: movie.id } });
+      const rows = await ratingRepo.find({
+        where: { userId, movieId: movie.id },
+      });
       expect(rows).toHaveLength(0);
     });
 
@@ -209,7 +213,9 @@ describe('RatingsService (integration)', () => {
         service.upsert(userId, movie.id, 4),
       ]);
 
-      const rows = await ratingRepo.find({ where: { userId, movieId: movie.id } });
+      const rows = await ratingRepo.find({
+        where: { userId, movieId: movie.id },
+      });
       expect(rows).toHaveLength(1);
 
       const fresh = await movieRepo.findOneByOrFail({ id: movie.id });

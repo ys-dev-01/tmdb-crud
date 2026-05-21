@@ -120,9 +120,7 @@ describe('MoviesService (integration)', () => {
       // First .get() call reads the movies:rating-version key; second
       // is the list payload itself. Both must resolve to non-undefined
       // for the short-circuit branch to take the cached payload.
-      cache.get
-        .mockResolvedValueOnce('0')
-        .mockResolvedValueOnce(cached);
+      cache.get.mockResolvedValueOnce('0').mockResolvedValueOnce(cached);
 
       const result = await service.findMany({ limit: 2 });
 
