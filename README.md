@@ -13,12 +13,17 @@ cp .env.example .env
 docker compose up
 ```
 
-Before starting, you need a TMDB v3 API key (free): sign up at <https://www.themoviedb.org/settings/api>, then put the 32-character key in `.env` as `TMDB_API_KEY`.
+Before starting, you need two secrets in `.env`:
+
+- `TMDB_API_KEY` — TMDB v3 API key (free): sign up at <https://www.themoviedb.org/settings/api>.
+- `JWT_SECRET` — at least 32 random bytes. Generate one with `openssl rand -hex 32`.
+
+Then:
 
 - App: <http://localhost:8080>
 - Swagger UI: <http://localhost:8080/api>
 - Health check: <http://localhost:8080/health>
-- Genres: <http://localhost:8080/genres>
+- Genres: <http://localhost:8080/genres> *(requires `Authorization: Bearer <accessToken>`)*
 
 To stop and remove volumes:
 
@@ -41,6 +46,9 @@ All env vars the app reads are documented in `.env.example`.
 | `DB_NAME` | yes | — | Postgres database name |
 | `TMDB_API_KEY` | yes | — | TMDB v3 API key (32 hex chars) — get one at <https://www.themoviedb.org/settings/api> |
 | `TMDB_BASE_URL` | no | `https://api.themoviedb.org/3` | TMDB API base; overridable for testing |
+| `JWT_SECRET` | yes | — | HS256 signing secret, >= 32 bytes random. `openssl rand -hex 32` |
+| `JWT_ACCESS_TTL` | no | `15m` | Access token lifetime ([`ms`](https://www.npmjs.com/package/ms) format) |
+| `JWT_REFRESH_TTL` | no | `7d` | Refresh token lifetime |
 
 Env is validated at startup via Joi; the app exits if anything is missing or invalid.
 
@@ -48,13 +56,14 @@ Env is validated at startup via Joi; the app exits if anything is missing or inv
 
 ```
 src/
+├── auth/          # /auth/* endpoints, JWT strategy, refresh-token service, hashing
+├── common/        # @Public, @CurrentUser decorators, JwtAuthGuard
 ├── config/        # Joi env validation schema
 ├── database/      # TypeORM connection + migrations
 ├── genres/        # /genres endpoint + TMDB sync
 ├── health/        # /health endpoint
 ├── tmdb/          # TmdbClient (axios + retry)
-├── auth/          # RefreshToken entity (logic lands later)
-├── users/         # User entity
+├── users/         # User entity + UsersService
 ├── movies/        # Movie + MovieGenre entities
 ├── ratings/       # Rating entity
 ├── watchlist/     # WatchlistEntry entity
@@ -63,16 +72,45 @@ src/
 └── main.ts
 ```
 
-Entities for unimplemented features (auth, movies, ratings, watchlist, favorites) live alongside the modules they will belong to; the schema was designed upfront in [`docs/schema.md`](docs/schema.md).
+Entities for unimplemented features (movies, ratings, watchlist, favorites) live alongside the modules they will belong to; the schema was designed upfront in [`docs/schema.md`](docs/schema.md).
 
 ## Endpoints
 
-| Method | Path | Description |
-|---|---|---|
-| GET | `/health` | App + Postgres reachability check |
-| GET | `/genres` | List all genres (synced from TMDB at boot) |
-| GET | `/api` | Swagger UI |
-| GET | `/api-json` | OpenAPI spec |
+Every route requires `Authorization: Bearer <accessToken>` unless marked public.
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/health` | public | App + Postgres reachability check |
+| POST | `/auth/register` | public | Create account; returns access + refresh tokens |
+| POST | `/auth/login` | public | Verify creds; returns access + refresh tokens |
+| POST | `/auth/refresh` | public | Rotate refresh token; returns a fresh pair |
+| POST | `/auth/logout` | public | Revoke a refresh token (idempotent) |
+| GET | `/auth/me` | required | Current user's profile |
+| GET | `/genres` | required | List all genres (synced from TMDB at boot) |
+| GET | `/api` | public | Swagger UI |
+| GET | `/api-json` | public | OpenAPI spec |
+
+## Auth
+
+- **Access tokens** are signed JWTs (HS256), default lifetime 15 minutes. Send as `Authorization: Bearer <token>`.
+- **Refresh tokens** are opaque random strings (256 bits), default lifetime 7 days. Stored as sha256 hashes — the DB cannot replay them on its own. **Single-use**: every successful `/auth/refresh` issues a new token and revokes the old; presenting a revoked token returns 401.
+- **Logout** revokes a refresh token; the access token continues to work until natural expiry (statelessness is the tradeoff for stateless JWTs).
+- **Identity** is sourced exclusively from the JWT's `sub` claim via `@CurrentUser()` — request bodies, URL params, and query strings are never trusted for user identity.
+- Passwords hashed with **Argon2id** at OWASP 2026 parameters (m=65536 KiB, t=3, p=1).
+- Login returns the same error for "user not found" and "wrong password" to prevent email enumeration.
+
+### Example flow
+
+```bash
+# Register
+curl -X POST http://localhost:8080/auth/register \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"you@example.com","password":"correct horse battery staple"}'
+
+# Capture the accessToken from the response, then call protected routes:
+curl http://localhost:8080/genres \
+  -H "Authorization: Bearer <accessToken>"
+```
 
 ## Database
 

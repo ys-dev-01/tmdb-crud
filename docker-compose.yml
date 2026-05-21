@@ -16,6 +16,9 @@ services:
       DB_NAME: ${DB_NAME}
       TMDB_API_KEY: ${TMDB_API_KEY}
       TMDB_BASE_URL: ${TMDB_BASE_URL:-https://api.themoviedb.org/3}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-15m}
+      JWT_REFRESH_TTL: ${JWT_REFRESH_TTL:-7d}
     depends_on:
       postgres:
         condition: service_healthy
