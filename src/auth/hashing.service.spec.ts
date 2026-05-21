@@ -1,6 +1,8 @@
 import { HashingService } from './hashing.service';
 
 describe('HashingService', () => {
+  // Argon2id at OWASP 2026 params is intentionally slow; default 5s isn't enough.
+  jest.setTimeout(30_000);
   const service = new HashingService();
 
   it('hashes a password into an argon2id-formatted string', async () => {
@@ -27,4 +29,4 @@ describe('HashingService', () => {
     expect(await service.verify(a, 'same_password')).toBe(true);
     expect(await service.verify(b, 'same_password')).toBe(true);
   });
-}, 30_000);
+});
