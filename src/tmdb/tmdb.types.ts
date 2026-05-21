@@ -13,3 +13,26 @@ export interface TmdbGenre {
 export interface TmdbGenresResponse {
   genres: TmdbGenre[];
 }
+
+/**
+ * Shape of a single movie inside /discover/movie results.
+ * /discover gives genre_ids (int[]); /movie/{id} gives a richer `genres`
+ * object array. We only sync via /discover so this shape is enough.
+ */
+export interface TmdbMovieSummary {
+  id: number;
+  title: string;
+  overview: string | null;
+  release_date: string | null;
+  poster_path: string | null;
+  original_language: string;
+  popularity: number;
+  genre_ids: number[];
+}
+
+export interface TmdbDiscoverResponse {
+  page: number;
+  results: TmdbMovieSummary[];
+  total_pages: number;
+  total_results: number;
+}

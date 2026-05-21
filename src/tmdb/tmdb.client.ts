@@ -6,7 +6,12 @@ import axiosRetry, {
   isNetworkOrIdempotentRequestError,
 } from 'axios-retry';
 import { TmdbError } from './tmdb.error';
-import { TmdbGenresResponse } from './tmdb.types';
+import {
+  TMDB_HTTP_RETRIES,
+  TMDB_HTTP_TIMEOUT_MS,
+  TMDB_RATE_LIMIT_STATUS,
+} from './tmdb.constants';
+import { TmdbDiscoverResponse, TmdbGenresResponse } from './tmdb.types';
 
 @Injectable()
 export class TmdbClient implements OnModuleInit {
@@ -21,23 +26,37 @@ export class TmdbClient implements OnModuleInit {
   onModuleInit(): void {
     this.http = axios.create({
       baseURL: this.config.get<string>('TMDB_BASE_URL'),
-      timeout: 10_000,
+      timeout: TMDB_HTTP_TIMEOUT_MS,
       params: { api_key: this.config.get<string>('TMDB_API_KEY') },
     });
 
     axiosRetry(this.http, {
-      retries: 3,
+      retries: TMDB_HTTP_RETRIES,
       retryDelay: exponentialDelay,
       retryCondition: (err) =>
         // axios-retry's default: network errors + idempotent 5xx.
-        // Also retry on 429 (rate limit) — TMDB throttles bursts.
-        isNetworkOrIdempotentRequestError(err) || err.response?.status === 429,
+        // Also retry on the TMDB-throttled rate-limit status.
+        isNetworkOrIdempotentRequestError(err) ||
+        err.response?.status === TMDB_RATE_LIMIT_STATUS,
     });
   }
 
   async fetchGenres(): Promise<TmdbGenresResponse> {
     return this.get<TmdbGenresResponse>('/genre/movie/list', {
       language: 'en-US',
+    });
+  }
+
+  /**
+   * Paginated movie listing. TMDB caps `page` at 500 (~10k movies total).
+   * sort_by=popularity.desc keeps results stable enough for repeat syncs.
+   */
+  async fetchDiscoverMovies(page: number): Promise<TmdbDiscoverResponse> {
+    return this.get<TmdbDiscoverResponse>('/discover/movie', {
+      language: 'en-US',
+      sort_by: 'popularity.desc',
+      include_adult: 'false',
+      page,
     });
   }
 

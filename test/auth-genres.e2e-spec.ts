@@ -71,6 +71,16 @@ describe('Auth + Genres (e2e)', () => {
               { id: 18, name: 'Drama' },
             ],
           }),
+        // MoviesSyncService runs at bootstrap; return an empty page so the
+        // e2e doesn't try to seed real movies (this suite tests auth +
+        // genres only).
+        fetchDiscoverMovies: () =>
+          Promise.resolve({
+            page: 1,
+            results: [],
+            total_pages: 0,
+            total_results: 0,
+          }),
       })
       .compile();
 

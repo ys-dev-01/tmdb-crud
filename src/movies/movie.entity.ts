@@ -37,9 +37,16 @@ export class Movie {
   })
   originalLanguage: string | null;
 
-  // NUMERIC (exact decimal) instead of float — no rounding surprises. pg returns as string.
-  @Column({ type: 'numeric', precision: 8, scale: 3, nullable: true })
-  popularity: string | null;
+  // double precision (not numeric): TMDB popularity is a relative score, not
+  // a financial amount. Float is enough; pg returns it as a JS number.
+  //
+  // TS type is `number` (not `number | null`) even though the SQL column is
+  // nullable. Reason: typeorm-cursor-pagination reads field types via TS
+  // reflection metadata. A `number | null` union reflects as `Object`, which
+  // the lib can't encode/decode. Sync always populates popularity from TMDB
+  // (which never omits it), so the type stays honest in practice.
+  @Column({ type: 'double precision', nullable: true })
+  popularity: number;
 
   // Denormalized aggregates for O(1) avg-rating reads. Kept in sync transactionally
   // by the ratings service (PR #8). AVG on read = rating_sum / NULLIF(rating_count, 0).

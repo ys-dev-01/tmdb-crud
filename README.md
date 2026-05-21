@@ -46,6 +46,7 @@ All env vars the app reads are documented in `.env.example`.
 | `DB_NAME` | yes | — | Postgres database name |
 | `TMDB_API_KEY` | yes | — | TMDB v3 API key (32 hex chars) — get one at <https://www.themoviedb.org/settings/api> |
 | `TMDB_BASE_URL` | no | `https://api.themoviedb.org/3` | TMDB API base; overridable for testing |
+| `MOVIES_SYNC_MAX_PAGES` | no | `5` | Pages of `/discover/movie` pulled per sync (20 movies/page; TMDB caps at 500) |
 | `JWT_SECRET` | yes | — | HS256 signing secret, >= 32 bytes random. `openssl rand -hex 32` |
 | `JWT_ACCESS_TTL` | no | `15m` | Access token lifetime ([`ms`](https://www.npmjs.com/package/ms) format) |
 | `JWT_REFRESH_TTL` | no | `7d` | Refresh token lifetime |
@@ -89,6 +90,9 @@ Every route requires `Authorization: Bearer <accessToken>` unless marked public.
 | POST | `/auth/logout` | public | Revoke a refresh token (idempotent) |
 | GET | `/auth/me` | required | Current user's profile |
 | GET | `/genres` | required | List all genres (synced from TMDB at boot) |
+| GET | `/movies` | required | List movies, cursor-paginated, optional `?genreIds=1,2` filter |
+| GET | `/movies/search` | required | Substring search over title (`?q=...`, optional `?genreIds=`) |
+| GET | `/movies/:id` | required | Movie detail with embedded genres |
 | GET | `/api` | public | Swagger UI |
 | GET | `/api-json` | public | OpenAPI spec |
 
@@ -113,6 +117,25 @@ curl -X POST http://localhost:8080/auth/register \
 curl http://localhost:8080/genres \
   -H "Authorization: Bearer <accessToken>"
 ```
+
+## Movies
+
+Movies are mirrored from TMDB's `/discover/movie` endpoint. The sync runs on app bootstrap and again every day at 04:00 UTC via `@nestjs/schedule`. Each page is upserted in its own transaction:
+
+1. Bulk `INSERT … ON CONFLICT (tmdb_id) DO UPDATE` on `movies` (skipping `rating_sum` and `rating_count`, which are owned by the ratings write path).
+2. Per-batch genre-link reconciliation: `DELETE FROM movie_genres WHERE movie_id IN (...)` then bulk `INSERT` the current set, mapping TMDB `genre_ids` to our internal `genre.id` via an in-memory lookup.
+
+Initial page count is set by `MOVIES_SYNC_MAX_PAGES` (default 5 = ~100 movies, fast first boot). TMDB caps `/discover/movie` at page 500.
+
+### Reads
+
+- **`GET /movies`** — cursor pagination via the [`typeorm-cursor-pagination`](https://github.com/benjamin658/typeorm-cursor-pagination) package. Sorted by popularity DESC with `id` as tiebreaker. Optional `?genreIds=1,2,3` filter (OR semantics, implemented as an `EXISTS` subquery so rows aren't multiplied).
+- **`GET /movies/:id`** — single movie with its full `genres` array. Two queries (movie + genres for that movie) rather than a JOIN — avoids row multiplication and keeps the response shape independent of FK direction.
+- **`GET /movies/search?q=…`** — substring match against `title` using the `pg_trgm` GIN index (`gin_trgm_ops`). Minimum 2-char query (below that, trigrams can't help). Top-N popularity-ordered results — no cursor, because ranking-based pagination is unstable.
+
+### Avg rating — O(1) reads
+
+The `movies` table carries denormalized `rating_sum` (bigint) and `rating_count` (int) columns. Avg is computed as `rating_sum / NULLIF(rating_count, 0)` directly on the row — no JOIN, no AVG aggregate, no row scan over the ratings table. PR #8 maintains these counters transactionally on every rating write.
 
 ## Database
 
@@ -139,6 +162,9 @@ Stack: `@nestjs/cache-manager` (NestJS wrapper) + `cache-manager` v7 + `@keyv/re
 | Path | Key | TTL | Notes |
 |---|---|---|---|
 | `GET /genres` | `genres:list` | 24h | TMDB genre list changes maybe yearly; aggressive TTL is safe. |
+| `GET /movies` | `movies:list:{limit}:{cursor}:{genreIds}` | 5min + jitter | Cursor + filter included in the key; jitter prevents stampede on cold start. |
+| `GET /movies/:id` | `movies:detail:{id}` | 5min + jitter | Invalidated by ratings writes (PR #8). |
+| `GET /movies/search` | `movies:search:{q-lower}:{limit}:{genreIds}` | 5min + jitter | `q` is lowercased so `mario` and `Mario` share the entry. |
 
 Redis runs as a separate compose service:
 
