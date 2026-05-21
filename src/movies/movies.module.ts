@@ -3,6 +3,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { TmdbModule } from '../tmdb/tmdb.module';
 import { Movie } from './movie.entity';
 import { MovieGenre } from './movie-genre.entity';
+import { MoviesController } from './movies.controller';
+import { MoviesService } from './movies.service';
 import { MoviesSyncService } from './movies.sync';
 
 @Module({
@@ -13,6 +15,7 @@ import { MoviesSyncService } from './movies.sync';
     TypeOrmModule.forFeature([Movie, MovieGenre]),
     TmdbModule,
   ],
-  providers: [MoviesSyncService],
+  controllers: [MoviesController],
+  providers: [MoviesService, MoviesSyncService],
 })
 export class MoviesModule {}

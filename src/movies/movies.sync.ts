@@ -102,7 +102,7 @@ export class MoviesSyncService implements OnApplicationBootstrap {
             releaseDate: m.release_date,
             posterPath: m.poster_path,
             originalLanguage: m.original_language,
-            popularity: String(m.popularity),
+            popularity: m.popularity,
           })),
         )
         .orUpdate(
