@@ -1,4 +1,9 @@
 import * as Joi from 'joi';
+import { MOVIES_SYNC_DEFAULT_MAX_PAGES } from '../movies/movies.constants';
+import {
+  TMDB_DISCOVER_PAGE_MAX,
+  TMDB_DISCOVER_PAGE_MIN,
+} from '../tmdb/tmdb.constants';
 
 /**
  * Validates the process env at app boot. Crash loudly on missing/invalid vars.
@@ -26,6 +31,12 @@ export const envValidationSchema = Joi.object({
   TMDB_BASE_URL: Joi.string()
     .uri({ scheme: ['https'] })
     .default('https://api.themoviedb.org/3'),
+  // How many pages to pull from /discover/movie. Bounded by TMDB's page cap.
+  MOVIES_SYNC_MAX_PAGES: Joi.number()
+    .integer()
+    .min(TMDB_DISCOVER_PAGE_MIN)
+    .max(TMDB_DISCOVER_PAGE_MAX)
+    .default(MOVIES_SYNC_DEFAULT_MAX_PAGES),
 
   // Auth — HMAC-SHA256 JWT secret. >= 32 bytes random; generate with
   // `openssl rand -hex 32`. Treat like a DB password — leak it and every
