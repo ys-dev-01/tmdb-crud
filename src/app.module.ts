@@ -8,6 +8,7 @@ import { envValidationSchema } from './config/env.validation';
 import { DatabaseModule } from './database/database.module';
 import { HealthModule } from './health/health.module';
 import { GenresModule } from './genres/genres.module';
+import { MoviesModule } from './movies/movies.module';
 import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 
@@ -40,7 +41,11 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     }),
     DatabaseModule,
     HealthModule,
+    // GenresModule MUST be imported before MoviesModule. NestJS fires
+    // OnApplicationBootstrap in module-import order, and the movies sync
+    // needs genres in the DB to translate genre_ids → our PKs.
     GenresModule,
+    MoviesModule,
     AuthModule,
   ],
   controllers: [],
