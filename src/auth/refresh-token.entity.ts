@@ -38,6 +38,14 @@ export class RefreshToken {
   @Column({ name: 'replaced_by', type: 'bigint', nullable: true })
   replacedBy: string | null;
 
+  // Self-FK so the generator emits the constraint. SET NULL on delete: if the
+  // forward link in the chain is purged, upstream tokens drop the back-pointer
+  // rather than cascading. We never .find({ relations: ['replacedByToken'] }) —
+  // this is purely for the FK; reads stay on the scalar `replacedBy` column.
+  @ManyToOne(() => RefreshToken, { onDelete: 'SET NULL', nullable: true })
+  @JoinColumn({ name: 'replaced_by' })
+  replacedByToken: RefreshToken | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 }

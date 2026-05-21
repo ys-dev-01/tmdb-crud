@@ -9,6 +9,8 @@ import 'dotenv/config';
 import { DataSource } from 'typeorm';
 import * as path from 'path';
 
+// Single named export only — TypeORM CLI's migration:generate refuses files with
+// multiple DataSource exports (rejects even an additional `export default`).
 export const AppDataSource = new DataSource({
   type: 'postgres',
   host: process.env.DB_HOST,
@@ -21,5 +23,3 @@ export const AppDataSource = new DataSource({
   migrations: [path.join(__dirname, 'migrations', '*.{ts,js}')],
   synchronize: false,
 });
-
-export default AppDataSource;
