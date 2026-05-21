@@ -146,9 +146,7 @@ describe('WatchlistService (integration)', () => {
       const movie = await makeMovie(1, 'The Movie');
 
       // Never added → remove should silently succeed.
-      await expect(
-        service.remove(userId, movie.id),
-      ).resolves.toBeUndefined();
+      await expect(service.remove(userId, movie.id)).resolves.toBeUndefined();
     });
 
     it('still bumps the version key even on a no-op delete', async () => {
@@ -247,9 +245,7 @@ describe('WatchlistService (integration)', () => {
         meta: { nextCursor: null, hasMore: false },
       };
       // First .get() is the version-key lookup; second is the payload.
-      cache.get
-        .mockResolvedValueOnce('0')
-        .mockResolvedValueOnce(cached);
+      cache.get.mockResolvedValueOnce('0').mockResolvedValueOnce(cached);
 
       const result = await service.list(userId, { limit: 10 });
       expect(result).toBe(cached);

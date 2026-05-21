@@ -186,9 +186,9 @@ describe('Watchlist (e2e)', () => {
       .get('/watchlist')
       .set('Authorization', `Bearer ${aliceToken}`)
       .expect(200);
-    const titles = (
-      res.body as { data: { title: string }[] }
-    ).data.map((i) => i.title);
+    const titles = (res.body as { data: { title: string }[] }).data.map(
+      (i) => i.title,
+    );
     expect(titles).toEqual(['Watchlist Movie B', 'Watchlist Movie A']);
   });
 
@@ -216,9 +216,9 @@ describe('Watchlist (e2e)', () => {
       .get('/watchlist')
       .set('Authorization', `Bearer ${aliceToken}`)
       .expect(200);
-    const titles = (
-      list.body as { data: { title: string }[] }
-    ).data.map((i) => i.title);
+    const titles = (list.body as { data: { title: string }[] }).data.map(
+      (i) => i.title,
+    );
     expect(titles).toEqual(['Watchlist Movie B']);
   });
 
