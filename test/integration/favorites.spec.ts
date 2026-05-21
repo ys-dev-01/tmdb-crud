@@ -139,9 +139,7 @@ describe('FavoritesService (integration)', () => {
       const userId = await makeUser('alice@test.com');
       const movie = await makeMovie(1, 'Beloved Movie');
 
-      await expect(
-        service.remove(userId, movie.id),
-      ).resolves.toBeUndefined();
+      await expect(service.remove(userId, movie.id)).resolves.toBeUndefined();
     });
   });
 
@@ -198,9 +196,7 @@ describe('FavoritesService (integration)', () => {
         data: [],
         meta: { nextCursor: null, hasMore: false },
       };
-      cache.get
-        .mockResolvedValueOnce('0')
-        .mockResolvedValueOnce(cached);
+      cache.get.mockResolvedValueOnce('0').mockResolvedValueOnce(cached);
 
       const result = await service.list(userId, { limit: 10 });
       expect(result).toBe(cached);

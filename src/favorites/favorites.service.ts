@@ -90,9 +90,7 @@ export class FavoritesService {
     const { data, cursor } = await paginator.paginate(qb);
 
     const result: PaginatedFavoritesDto = {
-      data: data.map((entry) =>
-        FavoriteItemDto.fromEntry(entry, entry.movie),
-      ),
+      data: data.map((entry) => FavoriteItemDto.fromEntry(entry, entry.movie)),
       meta: {
         nextCursor: cursor.afterCursor,
         hasMore: cursor.afterCursor !== null,
