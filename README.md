@@ -49,6 +49,8 @@ All env vars the app reads are documented in `.env.example`.
 | `JWT_SECRET` | yes | — | HS256 signing secret, >= 32 bytes random. `openssl rand -hex 32` |
 | `JWT_ACCESS_TTL` | no | `15m` | Access token lifetime ([`ms`](https://www.npmjs.com/package/ms) format) |
 | `JWT_REFRESH_TTL` | no | `7d` | Refresh token lifetime |
+| `REDIS_HOST` | yes | — | Redis host (`redis` inside compose) |
+| `REDIS_PORT` | no | `6379` | Redis port |
 
 Env is validated at startup via Joi; the app exits if anything is missing or invalid.
 
@@ -127,6 +129,32 @@ To create a new migration after editing entities:
 ```bash
 docker compose exec app npm run migration:generate -- src/database/migrations/<Name>
 ```
+
+## Caching
+
+The app uses **cache-aside** against Redis for read paths that benefit from it.
+
+Stack: `@nestjs/cache-manager` (NestJS wrapper) + `cache-manager` v7 + `@keyv/redis` via Keyv. `CacheModule` is registered globally; feature services inject `Cache` via `CACHE_MANAGER`.
+
+| Path | Key | TTL | Notes |
+|---|---|---|---|
+| `GET /genres` | `genres:list` | 24h | TMDB genre list changes maybe yearly; aggressive TTL is safe. |
+
+Redis runs as a separate compose service:
+
+- `redis:7-alpine` image
+- `maxmemory 256mb` + `maxmemory-policy allkeys-lru` — bounded memory; under pressure Redis evicts the least-recently-used keys. Cache is a performance layer, never a system of record.
+- Not exposed to the host; reachable only inside the compose network (like Postgres).
+
+To inspect what's cached:
+
+```bash
+docker compose exec redis redis-cli KEYS '*'
+docker compose exec redis redis-cli TTL '<key>'
+docker compose exec redis redis-cli GET '<key>'
+```
+
+Note: `@keyv/redis` prefixes keys with `keyv::keyv:` — the genres list lives at `keyv::keyv:genres:list`.
 
 ## Tests
 
