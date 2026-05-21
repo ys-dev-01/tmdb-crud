@@ -10,6 +10,8 @@ import {
   MOVIES_CACHE_TTL_JITTER_MS,
   MOVIES_CACHE_TTL_MS,
   MOVIES_LIST_DEFAULT_LIMIT,
+  MOVIES_RATING_VERSION_DEFAULT,
+  MOVIES_RATING_VERSION_KEY,
 } from './movies.constants';
 import { Movie } from './movie.entity';
 import { ListMoviesQueryDto } from './dto/list-movies.query.dto';
@@ -57,6 +59,20 @@ export class MoviesService {
     );
   }
 
+  /**
+   * Current "version" of the list/search cache namespace. Bumped by
+   * RatingsService on every write; old cache entries (still under the
+   * previous version prefix) become unreachable and TTL out on their
+   * own. Cheap O(1) invalidation of a whole wildcarded key namespace.
+   *
+   * Defaults to `'0'` before any rating write has bumped it — that way
+   * cold-start readers all share the same namespace.
+   */
+  private async cacheVersion(): Promise<string> {
+    const v = await this.cache.get<string>(MOVIES_RATING_VERSION_KEY);
+    return v ?? MOVIES_RATING_VERSION_DEFAULT;
+  }
+
   async findMany(query: ListMoviesQueryDto): Promise<PaginatedMoviesDto> {
     const limit = query.limit ?? MOVIES_LIST_DEFAULT_LIMIT;
     const genreIds = query.genreIds
@@ -64,7 +80,8 @@ export class MoviesService {
       .map((s) => s.trim())
       .filter(Boolean);
 
-    const cacheKey = `movies:list:${limit}:${query.cursor ?? ''}:${genreIds?.join(',') ?? ''}`;
+    const version = await this.cacheVersion();
+    const cacheKey = `movies:list:v${version}:${limit}:${query.cursor ?? ''}:${genreIds?.join(',') ?? ''}`;
     const cached = await this.cache.get<PaginatedMoviesDto>(cacheKey);
     if (cached) return cached;
 
@@ -139,9 +156,10 @@ export class MoviesService {
       .map((s) => s.trim())
       .filter(Boolean);
 
+    const version = await this.cacheVersion();
     // Lowercased q so 'mario' and 'Mario' share a cache key — ILIKE is
     // case-insensitive on the DB side, so they return identical rows.
-    const cacheKey = `movies:search:${query.q.toLowerCase()}:${limit}:${genreIds?.join(',') ?? ''}`;
+    const cacheKey = `movies:search:v${version}:${query.q.toLowerCase()}:${limit}:${genreIds?.join(',') ?? ''}`;
     const cached = await this.cache.get<SearchResultDto>(cacheKey);
     if (cached) return cached;
 

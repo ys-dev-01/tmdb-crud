@@ -10,6 +10,7 @@ import { DatabaseModule } from './database/database.module';
 import { HealthModule } from './health/health.module';
 import { GenresModule } from './genres/genres.module';
 import { MoviesModule } from './movies/movies.module';
+import { RatingsModule } from './ratings/ratings.module';
 import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 
@@ -49,6 +50,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     // needs genres in the DB to translate genre_ids → our PKs.
     GenresModule,
     MoviesModule,
+    RatingsModule,
     AuthModule,
   ],
   controllers: [],
