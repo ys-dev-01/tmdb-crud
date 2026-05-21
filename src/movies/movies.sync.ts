@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource, In } from 'typeorm';
 import { Genre } from '../genres/genre.entity';
@@ -45,12 +46,24 @@ export class MoviesSyncService implements OnApplicationBootstrap {
   }
 
   async onApplicationBootstrap(): Promise<void> {
+    await this.runSync('Initial');
+  }
+
+  // 4 AM UTC daily. Late enough to be off-peak in every timezone, low
+  // overlap with most app activity. The TMDB catalog changes maybe a few
+  // times per week, so daily is plenty.
+  @Cron(CronExpression.EVERY_DAY_AT_4AM, { name: 'movies-daily-sync' })
+  async dailySync(): Promise<void> {
+    await this.runSync('Daily');
+  }
+
+  private async runSync(label: string): Promise<void> {
     try {
       const total = await this.sync();
-      this.logger.log(`Initial movies sync complete: ${total} movies`);
+      this.logger.log(`${label} movies sync complete: ${total} movies`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      this.logger.error(`Initial movies sync failed: ${msg}`);
+      this.logger.error(`${label} movies sync failed: ${msg}`);
     }
   }
 
