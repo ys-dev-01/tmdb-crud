@@ -1,0 +1,30 @@
+{
+  "moduleFileExtensions": ["js", "json", "ts"],
+  "rootDir": "..",
+  "testEnvironment": "node",
+  "testRegex": "(src|test)/.*\\.(spec|e2e-spec)\\.ts$",
+  "transform": {
+    "^.+\\.(t|j)s$": "ts-jest"
+  },
+  "collectCoverageFrom": ["src/**/*.ts"],
+  "coveragePathIgnorePatterns": [
+    "/node_modules/",
+    "/dist/",
+    "\\.module\\.ts$",
+    "\\.dto\\.ts$",
+    "\\.entity\\.ts$",
+    "src/main\\.ts$",
+    "/migrations/",
+    "data-source\\.ts$"
+  ],
+  "coverageDirectory": "../coverage",
+  "coverageThreshold": {
+    "global": {
+      "statements": 90,
+      "branches": 70,
+      "functions": 85,
+      "lines": 90
+    }
+  },
+  "testTimeout": 60000
+}

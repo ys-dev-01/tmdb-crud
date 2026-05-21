@@ -7,8 +7,8 @@ on:
     branches: [main]
 
 jobs:
-  lint-and-build:
-    name: Lint and build
+  ci:
+    name: Lint, typecheck, build, test
     runs-on: ubuntu-latest
 
     steps:
@@ -24,8 +24,21 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Direct eslint invocation (no --fix) so auto-fixable issues fail CI
+      # instead of being silently corrected on the ephemeral runner.
       - name: Lint
-        run: npm run lint -- --max-warnings=0
+        run: npx eslint "{src,apps,libs,test}/**/*.ts" --max-warnings=0
+
+      # Catches the class of bug that slipped past PR #4: describe(fn, timeout)
+      # is a TS2554 the eslint pipeline doesn't surface.
+      - name: Typecheck
+        run: npx tsc --noEmit -p tsconfig.json
 
       - name: Build
         run: npm run build
+
+      # Unified run: unit + integration + e2e + coverage gate (90/70/85/90).
+      # testcontainers works on ubuntu-latest out of the box — Docker is
+      # pre-installed and accessible to the runner user.
+      - name: Test (with coverage gate)
+        run: npm run test:cov
