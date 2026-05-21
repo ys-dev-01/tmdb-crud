@@ -127,6 +127,24 @@ describe('Auth + Genres (e2e)', () => {
     expect(names).toEqual(['Action', 'Drama']);
   });
 
+  it('GET /auth/me returns the current user (CurrentUser decorator path)', async () => {
+    const email = 'me@test.com';
+    const password = 'correct horse battery staple';
+
+    const reg = await request(app.getHttpServer())
+      .post('/auth/register')
+      .send({ email, password })
+      .expect(201);
+    const tokens = reg.body as TokensResponse;
+
+    const me = await request(app.getHttpServer())
+      .get('/auth/me')
+      .set('Authorization', `Bearer ${tokens.accessToken}`)
+      .expect(200);
+
+    expect((me.body as { email: string }).email).toBe(email);
+  });
+
   it('refresh rotation: new pair issued, old refresh rejected on replay', async () => {
     const email = 'refresh@test.com';
     const password = 'correct horse battery staple';
