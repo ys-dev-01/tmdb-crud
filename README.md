@@ -158,6 +158,13 @@ Note: `@keyv/redis` prefixes keys with `keyv::keyv:` — the genres list lives a
 
 ## Tests
 
-```bash
-npm test
-```
+Three layers; integration and e2e need Docker running (testcontainers spawns ephemeral Postgres + Redis).
+
+| Layer | Command | What it covers |
+|---|---|---|
+| Unit | `npm test` | Pure logic with mocked deps; fast (~3s) |
+| Integration | `npm run test:integration` | Real Postgres in a `testcontainer` — TypeORM, constraints, transactions |
+| E2E | `npm run test:e2e` | Full app boot, supertest over HTTP, real Postgres + Redis containers |
+| All + coverage gate | `npm run test:cov` | Runs all three; fails build if statements <90, branches <70, functions <85, or lines <90 |
+
+CI runs `lint → tsc --noEmit → build → test:cov` on every PR.
