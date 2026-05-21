@@ -34,4 +34,8 @@ export const envValidationSchema = Joi.object({
   // Accepted formats: jsonwebtoken's expiresIn (e.g., '15m', '1h', '7d').
   JWT_ACCESS_TTL: Joi.string().default('15m'),
   JWT_REFRESH_TTL: Joi.string().default('7d'),
+
+  // Redis (cache-aside via CacheModule + @keyv/redis)
+  REDIS_HOST: Joi.string().required(),
+  REDIS_PORT: Joi.number().port().default(6379),
 });
